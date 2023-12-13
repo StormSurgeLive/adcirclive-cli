@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-package local::bin::stormcli;
+package bin::adclive;
 
 use strict;
 use warnings;

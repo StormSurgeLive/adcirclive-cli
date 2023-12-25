@@ -3,10 +3,8 @@ package bin::adclive;
 
 use strict;
 use warnings;
-use Util::H2O::More qw/ddd h2o ini2h2o opt2h2o o2h/;
+use Util::H2O::More qw/ddd d2o h2o ini2h2o opt2h2o o2h/;
 use HTTP::Tiny qw//;
-use Getopt::Long qw//;
-use Config::Tiny qw//;
 use Digest::SHA qw/sha256_hex/;
 use MIME::Base64 qw/encode_base64/;
 use Time::HiRes qw//;
@@ -19,7 +17,7 @@ use constant {
     EXIT_SUCCESS   => 0,
     EXIT_ERROR     => 255,
     DEFAULT_CONFIG => sprintf( qq{%s/asgs-global.conf}, ( getpwuid($<) )[7] ),    # $HOME/asgs-global.conf
-    BASEURL        => q{https://stormreplay.com/api},
+    BASEURL        => q{https://tools.adcirc.live/api},
 };
 
 my $config     = ini2h2o DEFAULT_CONFIG;
@@ -39,41 +37,54 @@ exit dispatch {
   my ($subcmd, $ARGV_ref, $config) = xshift @_;
   xdefault $subcmd, q{help};
 } [ $subcommand, \@ARGV, $config ],
- on help => \&show_help,
- on uuid => \&get_uuid,
+ on help   => \&show_help,
+ on meshes => \&get_meshes,
+ on uuid   => \&get_uuid,
 ;
 #>>>
+
+sub _get_signed_ua($) {
+    my ($config) = @_;
+    my $key    = $config->adcirclive->apikey;
+    my $secret = $config->adcirclive->apisecret;
+
+    # add $secret to string, get SHA256 hash
+    my $nonce          = Time::HiRes::time * 100_000;
+    my $signature      = sha256_hex( $nonce . $secret );
+    my $_authorization = sprintf( qq{%s:%s}, $key, $signature );
+    my $authorization  = encode_base64( $_authorization, q{} );
+
+    my $default_headers = {
+        q{x-adcirclive-api-version} => q{1.0},
+        q{x-auth-nonce}             => $nonce,
+        q{Authorization}            => $authorization,
+        q{Content-Type}             => q{application/json},
+    };
+
+    return HTTP::Tiny->new( ( default_headers => $default_headers ) );
+}
+
+sub get_meshes {
+  my ($subcmd, $ARGV_ref, $config) = xshift @_;
+  my $ua       = _get_signed_ua $config;
+  my $URL      = sprintf qq{%s/meshes}, BASEURL;
+  my $response = h2o $ua->get($URL);
+  if ($response->success) {
+    my $meshes = d2o decode_json $response->content;
+    foreach my $mesh ($meshes->all) {
+      printf qq{%-17s(%-8s nodes, %-8s elements)\n}, $mesh->name, $mesh->nodes, $mesh->elements;
+    } 
+  }
+}
 
 sub get_uuid {
   my ($subcmd, $ARGV_ref, $config) = xshift @_;
   ddd $subcmd, $ARGV_ref, $config;
-
 }
 
 sub show_help {
   my ($subcmd, $ARGV_ref, $config) = xshift @_;
   ddd $subcmd, $ARGV_ref, $config;
 };
-
-__END__
-
-sub _get_signed_user_agent {
-    my $key    = $config->replayd->apikey;
-    my $secret = $config->replayd->apisecret;
-
-    # add $secret to string, get SHA256 hash
-    my $nonce         = Time::HiRes::time * 100_000;
-    my $signature     = sha256_hex( $nonce . $secret );
-    my $authorization = encode_base64( sprintf( qq{%s:%s}, $key, $signature ), q{} );
-
-    my $default_headers = {
-        q{x-replayd-api-version} => q{1.0},
-        q{x-auth-nonce}          => $nonce,
-        q{Authorization}         => $authorization,
-        q{Content-Type}          => q{application/json},
-    };
-
-    return HTTP::Tiny->new( ( default_headers => $default_headers ) );
-}
 
 1;

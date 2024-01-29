@@ -3,7 +3,7 @@ package bin::adclive;
 
 use strict;
 use warnings;
-use Util::H2O::More qw/ddd d2o h2o ini2h2o opt2h2o o2h/;
+use Util::H2O::More qw/ddd d2o h2o ini2h2o o2h Getopt2h2o/;
 use HTTP::Tiny qw//;
 use Digest::SHA qw/sha256_hex/;
 use MIME::Base64 qw/encode_base64/;
@@ -17,7 +17,7 @@ use constant {
     EXIT_SUCCESS   => 0,
     EXIT_ERROR     => 255,
     DEFAULT_CONFIG => sprintf( qq{%s/asgs-global.conf}, ( getpwuid($<) )[7] ),    # $HOME/asgs-global.conf
-    BASEURL        => q{https://tools.adcirc.live/api},
+    BASEURL        => q{https://tools.adcirc.live},
 };
 
 my $config     = ini2h2o DEFAULT_CONFIG;
@@ -26,7 +26,8 @@ my $subcommand = shift @ARGV;
 # checks ref type, then returns dereferenced
 # version of $_[0] (because that's all dispatch
 # will take, single reference ...
-sub xshift(@) {                               #TODO <~ add this to Dispatch::Fu, test, and add new release
+
+sub shift_deref(@) {   #TODO !!! <~ add this to Dispatch::Fu, test, and add new release !!!
   return %{+shift} if ref $_[0] eq q{HASH};
   return @{+shift} if ref $_[0] eq q{ARRAY};
   return shift @_  if ref $_[0] eq q{SCALAR};
@@ -34,12 +35,13 @@ sub xshift(@) {                               #TODO <~ add this to Dispatch::Fu,
 
 #<<<
 exit dispatch {
-  my ($subcmd, $ARGV_ref, $config) = xshift @_;
+  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
   xdefault $subcmd, q{help};
 } [ $subcommand, \@ARGV, $config ],
  on help   => \&show_help,
  on meshes => \&get_meshes,
  on uuid   => \&get_uuid,
+ on xdmf   => \&get_xdmf, 
 ;
 #>>>
 
@@ -64,27 +66,94 @@ sub _get_signed_ua($) {
     return HTTP::Tiny->new( ( default_headers => $default_headers ) );
 }
 
-sub get_meshes {
-  my ($subcmd, $ARGV_ref, $config) = xshift @_;
+sub get_xdmf {
+  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
+  my $o        = Getopt2h2o $ARGV_ref, {as => q{stdout}, maxele => 1}, qw/adcirc=s as=s mesh=s maxele maxwvel maxvel minpr maxrs swanhsmax swantpsmax paraview=s/;
   my $ua       = _get_signed_ua $config;
-  my $URL      = sprintf qq{%s/meshes}, BASEURL;
+
+  # get mesh look up table
+  my $URL      = sprintf qq{%s/api/meshes}, BASEURL;
+  my $mesh_table = h2o $ua->get($URL);
+  my $mesh;
+
+  if ($mesh_table->success) {
+    my $meshes = d2o decode_json $mesh_table->content;
+    my %meshes = map { $_->name => $_ } $meshes->all;
+    $mesh      = $meshes{$o->mesh};
+  }
+
+   my $content = encode_json {
+      mesh => {
+        name     => $o->mesh,
+        nodes    => $mesh->nodes,
+        elements => $mesh->elements,
+      },
+      output => {
+        maxEle     => $o->maxele      // undef,
+        maxWVel    => $o->maxwvel     // undef,
+        maxVel     => $o->maxvel      // undef,
+        minPr      => $o->minpr       // undef,
+        maxRS      => $o->maxrs       // undef,
+        swanHSMax  => $o->swanhsmax   // undef,
+        swanTPSMax => $o->swantpsmax  // undef,
+      },
+      paraviewVersion => $o->paraview // q{unknown},
+      adcircVersion   => $o->adcirc   // q{unknown},
+  };
+
+# TODO: figure out how to get JSON to serialize as bare word `true` or `false`
+  $content =~ s/:null/:false/g;
+  $content =~ s/:"1"|:1/:true/g;
+
+  $URL         = sprintf qq{%s/spa/paraview/XDMF/api/file/static}, BASEURL;
+  my $response = h2o $ua->post($URL, { content => $content });
+
+  if ($response->success) {
+    my $file_info = d2o decode_json $response->content;
+    if ($o->as eq q{stdout}) {
+      print STDOUT $file_info->content;
+    }
+    else { #if ($o->as eq q{json}) {
+      print $response->content;
+    }
+  }
+  return EXIT_SUCCESS;
+}
+
+sub get_meshes {
+  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
+  my $o        = Getopt2h2o $ARGV_ref, {as => q{json}}, qw/as=s/;
+  my $ua       = _get_signed_ua $config;
+  my $URL      = sprintf qq{%s/api/meshes}, BASEURL;
   my $response = h2o $ua->get($URL);
   if ($response->success) {
     my $meshes = d2o decode_json $response->content;
-    foreach my $mesh ($meshes->all) {
-      printf qq{%-17s(%-8s nodes, %-8s elements)\n}, $mesh->name, $mesh->nodes, $mesh->elements;
-    } 
+    if ($o->as eq q{json}) {
+      print $response->content;
+    }
+    else {
+      foreach my $mesh ($meshes->all) {
+        printf qq{%-17s(%-8s nodes, %-8s elements)\n}, $mesh->name, $mesh->nodes, $mesh->elements;
+      } 
+      printf qq{\ntip: use "--as json" to get list in JSON for more flexible processing\n}
+    }
   }
+  return EXIT_SUCCESS;
 }
 
 sub get_uuid {
-  my ($subcmd, $ARGV_ref, $config) = xshift @_;
+  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
   ddd $subcmd, $ARGV_ref, $config;
 }
 
 sub show_help {
-  my ($subcmd, $ARGV_ref, $config) = xshift @_;
-  ddd $subcmd, $ARGV_ref, $config;
+  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
+  print STDERR <<EOF;
+adclive - Commandline client for tools.adcirc.live
+
+Subcomman ds:
+  adclive meshes - list all supported meshes
+EOF
 };
 
 1;

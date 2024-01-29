@@ -16,10 +16,13 @@ Note: an account and API key/secret is required from https://tools.adcirc.live.
 
 ### List Supported Meshes
 
+```
   $ ./bin/adclive meshes
   
   [{"nodes":22425,"elements":41330,"name":"APES"},{"nodes":32218,"name":"BeaufortInlet","elements":58641},{"name":"EC2001","elements":492179,"nodes":254565},{"elements":3770720,"name":"EC2012","nodes":2066216},{"name":"EC95d","elements":58369,"nodes":31435},{"elements":3564104,"name":"HSOFS","nodes":1813443},{"name":"NAC2014","elements":6167588,"nodes":3110470},{"name":"NCv6d","elements":575512,"nodes":295328},{"nodes":2249093,"elements":4480230,"name":"SFLv111"},{"name":"Shinnecock","elements":5780,"nodes":3070},{"nodes":3352598,"elements":6675517,"name":"TX2008"},{"nodes":417642,"name":"ULLR2D","elements":826866}]APES             (22425    nodes, 41330    elements)
+```
 
+```
   $ ./bin/adclive meshes --as list
   
   BeaufortInlet    (32218    nodes, 58641    elements)
@@ -35,12 +38,13 @@ Note: an account and API key/secret is required from https://tools.adcirc.live.
   ULLR2D           (417642   nodes, 826866   elements)
   
   tip: use "--as json" to get list in JSON for more flexible processing
+```
 
 ### Static XDMF for Paraview Visualization
 
+```
   $ ./bin/adclive xdmf --mesh TX2008 --paraview 5.9.1 --adcirc v53.01 --maxele --maxvel --maxwvel --minpr --maxrs --swanhsmax --swantpsmax --as stdout 
 
-```
   <?xml version="1.0" encoding="utf-8" ?>
   <Xdmf xmlns:xi="http://www.w3.org/2001/XInclude" Version="2.1">
   <!--

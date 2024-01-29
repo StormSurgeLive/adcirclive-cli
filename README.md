@@ -40,6 +40,7 @@ Note: an account and API key/secret is required from https://tools.adcirc.live.
 
   $ ./bin/adclive xdmf --mesh TX2008 --paraview 5.9.1 --adcirc v53.01 --maxele --maxvel --maxwvel --minpr --maxrs --swanhsmax --swantpsmax --as stdout 
 
+```
   <?xml version="1.0" encoding="utf-8" ?>
   <Xdmf xmlns:xi="http://www.w3.org/2001/XInclude" Version="2.1">
   <!--
@@ -231,3 +232,4 @@ Note: an account and API key/secret is required from https://tools.adcirc.live.
       </Grid>
     </Domain>
   </Xdmf>
+```

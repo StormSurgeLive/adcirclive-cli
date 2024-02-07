@@ -18,6 +18,8 @@ use constant {
     EXIT_ERROR     => 255,
     DEFAULT_CONFIG => sprintf( qq{%s/asgs-global.conf}, ( getpwuid($<) )[7] ),    # $HOME/asgs-global.conf
     BASEURL        => q{https://tools.adcirc.live},
+    true           => $JSON::PP::true,
+    false          => $JSON::PP::false,
 };
 
 my $config     = ini2h2o DEFAULT_CONFIG;
@@ -41,7 +43,8 @@ exit dispatch {
  on help   => \&show_help,
  on meshes => \&get_meshes,
  on uuid   => \&get_uuid,
- on xdmf   => \&get_xdmf, 
+ on xdmf   => \&get_xdmf,
+ on xdmftv => \&get_xdmf_tv,
 ;
 #>>>
 
@@ -66,12 +69,10 @@ sub _get_signed_ua($) {
     return HTTP::Tiny->new( ( default_headers => $default_headers ) );
 }
 
-sub get_xdmf {
-  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
-  my $o        = Getopt2h2o $ARGV_ref, {as => q{stdout}, maxele => 1}, qw/adcirc=s as=s mesh=s maxele maxwvel maxvel minpr maxrs swanhsmax swantpsmax paraview=s/;
-  my $ua       = _get_signed_ua $config;
-
+sub _lookup_mesh {
+  my $name = shift;
   # get mesh look up table
+  my $ua       = _get_signed_ua $config;
   my $URL      = sprintf qq{%s/api/meshes}, BASEURL;
   my $mesh_table = h2o $ua->get($URL);
   my $mesh;
@@ -79,33 +80,87 @@ sub get_xdmf {
   if ($mesh_table->success) {
     my $meshes = d2o decode_json $mesh_table->content;
     my %meshes = map { $_->name => $_ } $meshes->all;
-    $mesh      = $meshes{$o->mesh};
+    $mesh      = $meshes{$name};
   }
 
-   my $content = encode_json {
-      mesh => {
-        name     => $o->mesh,
-        nodes    => $mesh->nodes,
-        elements => $mesh->elements,
+  return $mesh;
+}
+
+sub get_xdmf_tv {
+  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
+  my $o        = Getopt2h2o $ARGV_ref, {as => q{stdout}, fort63 => 1}, qw/adcirc=s as=s mesh=s fort63 fort64 fort73 fort74 rads64 swanhs63 swantps63 swandir63 paraview=s/;
+  my $ua       = _get_signed_ua $config;
+
+ my $mesh = _lookup_mesh($o->mesh);
+
+ my $content = encode_json {
+    mesh => {
+      name     => $o->mesh,
+      nodes    => $mesh->nodes,
+      elements => $mesh->elements,
+    },
+    output => {
+      fort63    => ($o->fort63)    ? true : false, # encode_json needs $JSON::PP's booleans here
+      fort64    => ($o->fort64)    ? true : false, # hence the use of bareword 'true' and 'false'.
+      fort73    => ($o->fort73)    ? true : false, # see them defined at the top of this file
+      fort74    => ($o->fort74)    ? true : false,
+      rads64    => ($o->rads64)    ? true : false,
+      swanDIR63 => ($o->swandir63) ? true : false,
+      swanHS63  => ($o->swanhs63)  ? true : false,
+      swanTPS63 => ($o->swantps63) ? true : false,
+      time => {
+        coldStartDateTime   => "2024-01-30T06:00:00.000Z",
+        numDataSets         => 120,
+        outputStartDateTime => "2024-01-30T06:00:00.000Z", 
+        timeIncrement       => 3600,
       },
-      output => {
-        maxEle     => $o->maxele      // undef,
-        maxWVel    => $o->maxwvel     // undef,
-        maxVel     => $o->maxvel      // undef,
-        minPr      => $o->minpr       // undef,
-        maxRS      => $o->maxrs       // undef,
-        swanHSMax  => $o->swanhsmax   // undef,
-        swanTPSMax => $o->swantpsmax  // undef,
-      },
-      paraviewVersion => $o->paraview // q{unknown},
-      adcircVersion   => $o->adcirc   // q{unknown},
+    },
+    paraviewVersion => $o->paraview // q{unknown},
+    adcircVersion   => $o->adcirc   // q{unknown},
   };
 
-# TODO: figure out how to get JSON to serialize as bare word `true` or `false`
-  $content =~ s/:null/:false/g;
-  $content =~ s/:"1"|:1/:true/g;
+  my $URL      = sprintf qq{%s/spa/paraview/XDMF/api/file/timevarying}, BASEURL;
+  my $response = h2o $ua->post($URL, { content => $content });
 
-  $URL         = sprintf qq{%s/spa/paraview/XDMF/api/file/static}, BASEURL;
+  if ($response->success) {
+    my $file_info = d2o decode_json $response->content;
+    if ($o->as eq q{stdout}) {
+      print STDOUT $file_info->content;
+    }
+    else { #if ($o->as eq q{json}) {
+      print $response->content;
+    }
+  }
+  return EXIT_SUCCESS;
+}
+
+sub get_xdmf {
+  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
+  my $o        = Getopt2h2o $ARGV_ref, {as => q{stdout}, maxele => 1}, qw/adcirc=s as=s mesh=s maxele maxwvel maxvel minpr maxrs swanhsmax swantpsmax paraview=s/;
+  my $ua       = _get_signed_ua $config;
+
+ my $mesh = _lookup_mesh($o->mesh);
+
+ my $content = encode_json {
+    mesh => {
+      name     => $o->mesh,
+      nodes    => $mesh->nodes,
+      elements => $mesh->elements,
+    },
+    output => {
+      maxEle     => ($o->maxele)     ? true : false, # bareword true/false defined at top of
+      maxWVel    => ($o->maxwvel)    ? true : false, # file, required by JSON::PP::encode_json
+      maxVel     => ($o->maxvel)     ? true : false,
+      minPr      => ($o->minpr)      ? true : false,
+      maxRS      => ($o->maxrs)      ? true : false,
+      swanHSMax  => ($o->swanhsmax)  ? true : false,
+      swanTPSMax => ($o->swantpsmax) ? true : false,
+    },
+    paraviewVersion => $o->paraview // q{unknown},
+    adcircVersion   => $o->adcirc   // q{unknown},
+  };
+
+  my $URL      = sprintf qq{%s/spa/paraview/XDMF/api/file/static}, BASEURL;
   my $response = h2o $ua->post($URL, { content => $content });
 
   if ($response->success) {

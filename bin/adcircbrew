@@ -1,0 +1,50 @@
+#!/usr/bin/env perl
+
+package bin::adcircbrew;
+
+use strict;
+use warnings;
+
+my $subcommand = shift @ARGV;
+
+# all builds are "thick" by default
+
+#<<<
+exit dispatch {
+  my ($subcommand, $ARGV_ref) = xshift_and_deref @_;
+
+} [ $subcommand, \@ARGV ],
+  on build  => sub { # build and install an adcirc version
+
+# SOME OPTIONS TO SUPPORT HERE
+   # --with-netcdf4=/path/to/upper/dir (point to an existing installation of netCDF, don't build on)
+   # --with-mpif90=/path/to/mpif90     (point to where mpif90 - or mpiifort, lives)
+   # --without-netcdf4                 (implies, --without-hdf5)
+   # --without-openmpi                 (skips OpenMPI check, doesn't build padcirc)
+   # --skip-openmpi-check              (by default build OpenMPI 1.8.x if mpif90 is not found)
+   # --openmp                          (turn on appropriate flags to build OpenMP if present)
+
+  },
+  on init   => sub { # ensure shell "RC" files are in place and available;
+                     # list instructions to a call to "source" the RC in $HOME/.bashrc (or whatever)
+
+  },
+  on list   => sub { # list install adcirc versions
+
+  },
+  on remove => sub { # delete ADCIRC install, including 
+
+  }, 
+  on switch => sub { # permanently switch to specified version by default
+
+  },
+  on use    => sub { # use specified version of ADCIRC right now
+
+  },
+;;
+#>>>
+  
+
+
+
+1;

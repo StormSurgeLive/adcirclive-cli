@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-package bin::adclive;
+package bin::adcirclive;
 
 use strict;
 use warnings;
@@ -25,19 +25,9 @@ use constant {
 my $config     = ini2h2o DEFAULT_CONFIG;
 my $subcommand = shift @ARGV;
 
-# checks ref type, then returns dereferenced
-# version of $_[0] (because that's all dispatch
-# will take, single reference ...
-
-sub shift_deref(@) {   #TODO !!! <~ add this to Dispatch::Fu, test, and add new release !!!
-  return %{+shift} if ref $_[0] eq q{HASH};
-  return @{+shift} if ref $_[0] eq q{ARRAY};
-  return shift @_  if ref $_[0] eq q{SCALAR};
-}
-
 #<<<
 exit dispatch {
-  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
+  my ($subcmd, $ARGV_ref, $config) = xshift_and_deref @_;
   xdefault $subcmd, q{help};
 } [ $subcommand, \@ARGV, $config ],
  on help   => \&show_help,
@@ -87,11 +77,14 @@ sub _lookup_mesh {
 }
 
 sub get_xdmf_tv {
-  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
-  my $o        = Getopt2h2o $ARGV_ref, {as => q{stdout}, fort63 => 1}, qw/adcirc=s as=s mesh=s fort63 fort64 fort73 fort74 rads64 swanhs63 swantps63 swandir63 paraview=s/;
+  my ($subcmd, $ARGV_ref, $config) = xshift_and_deref @_;
+  my $o        = Getopt2h2o $ARGV_ref, {as => q{stdout}, fort63 => 1}, qw/adcirc=s as=s mesh=s fort63 fort64 fort73 fort74 rads64 swanhs63 swantps63 swandir63 paraview=s coldstart=s outputstart=s count=i timeinc=i/;
   my $ua       = _get_signed_ua $config;
 
  my $mesh = _lookup_mesh($o->mesh);
+
+ #"2024-01-30T06:00:00.000Z";
+ my $now  = POSIX::strftime("%Y-%m-%dT%H-%M-%SZ",localtime(time));
 
  my $content = encode_json {
     mesh => {
@@ -109,10 +102,10 @@ sub get_xdmf_tv {
       swanHS63  => ($o->swanhs63)  ? true : false,
       swanTPS63 => ($o->swantps63) ? true : false,
       time => {
-        coldStartDateTime   => "2024-01-30T06:00:00.000Z",
-        numDataSets         => 120,
-        outputStartDateTime => "2024-01-30T06:00:00.000Z", 
-        timeIncrement       => 3600,
+        coldStartDateTime   => $o->coldstart   // $now, 
+        outputStartDateTime => $o->outputstart // $now, 
+        numDataSets         => $o->count       // 120,
+        timeIncrement       => $o->timeinc     // 3600,
       },
     },
     paraviewVersion => $o->paraview // q{unknown},
@@ -135,7 +128,7 @@ sub get_xdmf_tv {
 }
 
 sub get_xdmf {
-  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
+  my ($subcmd, $ARGV_ref, $config) = xshift_and_deref @_;
   my $o        = Getopt2h2o $ARGV_ref, {as => q{stdout}, maxele => 1}, qw/adcirc=s as=s mesh=s maxele maxwvel maxvel minpr maxrs swanhsmax swantpsmax paraview=s/;
   my $ua       = _get_signed_ua $config;
 
@@ -176,7 +169,7 @@ sub get_xdmf {
 }
 
 sub get_meshes {
-  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
+  my ($subcmd, $ARGV_ref, $config) = xshift_and_deref @_;
   my $o        = Getopt2h2o $ARGV_ref, {as => q{json}}, qw/as=s/;
   my $ua       = _get_signed_ua $config;
   my $URL      = sprintf qq{%s/api/meshes}, BASEURL;
@@ -197,17 +190,17 @@ sub get_meshes {
 }
 
 sub get_uuid {
-  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
+  my ($subcmd, $ARGV_ref, $config) = xshift_and_deref @_;
   ddd $subcmd, $ARGV_ref, $config;
 }
 
 sub show_help {
-  my ($subcmd, $ARGV_ref, $config) = shift_deref @_;
+  my ($subcmd, $ARGV_ref, $config) = xshift_and_deref @_;
   print STDERR <<EOF;
-adclive - Commandline client for tools.adcirc.live
+adcirclive - Commandline client for tools.adcirc.live
 
 Subcomman ds:
-  adclive meshes - list all supported meshes
+  adcirclive meshes - list all supported meshes
 EOF
 };
 

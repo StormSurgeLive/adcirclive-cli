@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 
-package bin::adcircbrew;
+package bin::adcircbrew; # do for ADCIRC what perlbrew does for PERL
 
 use strict;
 use warnings;

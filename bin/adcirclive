@@ -1,9 +1,10 @@
 #!/usr/bin/env perl
 package bin::adcirclive;
 
+use v5.10;
 use strict;
 use warnings;
-use Util::H2O::More qw/ddd d2o h2o ini2h2o o2h Getopt2h2o/;
+use Util::H2O::More qw/ddd d2o h2o ini2h2o o2h Getopt2h2o HTTPTiny2h2o/;
 use HTTP::Tiny qw//;
 use Digest::SHA qw/sha256_hex/;
 use MIME::Base64 qw/encode_base64/;
@@ -30,6 +31,7 @@ exit dispatch {
   my ($subcmd, $ARGV_ref, $config) = xshift_and_deref @_;
   xdefault $subcmd, q{help};
 } [ $subcommand, \@ARGV, $config ],
+ on config => \&get_asgs_config,
  on help   => \&show_help,
  on meshes => \&get_meshes,
  on uuid   => \&get_uuid,
@@ -74,6 +76,44 @@ sub _lookup_mesh {
   }
 
   return $mesh;
+}
+
+#
+# CLI interface for ASGS Config,
+#  + shouldn't require ACL / HMAC key
+#  + allow it to return something for an very few or no 
+#    e.g., adcirclive config [--default "...*"]
+#    * default naming handled by script and translated to building web request
+#  + --show-default-kinds (lists named defaults - profiles on the SPA)
+#  ? "--interative" wizard mode?
+#  + tidy up "uuid"
+#
+#
+#  Usage,
+#
+#    NAME=$(adcirclive config --grid TX2008 --dry-run)            # get potential default name
+#    adcirclive config --grid TX2008 > git/asgs-config/2024/$NAME # use default name
+#
+#
+sub get_asgs_config {
+  my ($subcmd, $ARGV_ref, $config) = xshift_and_deref @_;
+  my $o        = Getopt2h2o $ARGV_ref, {as => q{stdout}}, qw/admin=s default=s grid=s instance=s machine=s me=s met=s/; # params?
+  my $ua       = _get_signed_ua $config;
+
+
+  my $URL      = sprintf qq{%s/spa/models/ASGS/api/file/config}, BASEURL;
+
+  my $content  = do { local $/; open my $FH, "<", "config-sample.json"; <$FH> }; # ??? use JSON as some kind of template or deal with defaults on the server ???
+
+  my $params   = {
+    INSTANCENAME  => $o->instance // sprintf("%s_%s_%s_%s",$o->grid // "TX2008",$o->met // "NAM",$o->machine // "Linux", $o->me // "ukwn"),
+    ASGSADMIN     => $o->admin    // q{unknown@memenesia.net},
+    GRIDNAME      => $o->grid     // "TX2008",
+  };
+
+  my $response = HTTPTiny2h2o $ua->post($URL, { content => encode_json $params });
+
+  print $response->content->content;
 }
 
 sub get_xdmf_tv {

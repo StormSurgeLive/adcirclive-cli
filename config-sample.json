@@ -1,0 +1,84 @@
+{
+  "DEFAULT": "nam-linux",
+  "HANDLE": "ukwn",
+  "ASGSADMIN": "unknown@memenesia.net",
+  "INSTANCENAME": "TX2008_NAM_linux_ukwn",
+  "GRIDNAME": "TX2008",
+  "ADCIRCVERSION": "v53.05",
+  "QOS": null,
+  "ACCOUNT": null,
+  "HOTORCOLD": "coldstart",
+  "COLDSTARTDATE": "2024-09-17T03:48:02.739Z",
+  "SPECIFYCOLDSTART": "datetime",
+  "LASTSUBDIR": "null",
+  "HINDCASTLENGTH": 30,
+  "TIDEFAC": "on",
+  "MET_KIND": "NAM",
+  "CYCLE": {
+    "z00": true,
+    "z06": true,
+    "z12": true,
+    "z18": true
+  },
+  "STORM": 1,
+  "YEAR": 2024,
+  "BASIN": "al",
+  "atcfScenarios": [
+    {
+      "type": "nhcConsensus",
+      "percent": 0,
+      "opendapnotify": "coastalrisk.live@outlook.com,pub.coastalrisk.live@outlook.com,asgs.cera.lsu@coastalrisk.live,asgs.cera.pub.lsu@coastalrisk.live"
+    },
+    {
+      "type": "nhcConsensusWind10m",
+      "percent": 0,
+      "opendapnotify": "coastalrisk.live@outlook.com,pub.coastalrisk.live@outlook.com,asgs.cera.lsu@coastalrisk.live,asgs.cera.pub.lsu@coastalrisk.live"
+    },
+    {
+      "type": "veerRight",
+      "percent": 100,
+      "opendapnotify": "coastalrisk.live@outlook.com,pub.coastalrisk.live@outlook.com,asgs.cera.lsu@coastalrisk.live,asgs.cera.pub.lsu@coastalrisk.live"
+    },
+    {
+      "type": "veerRightWind10m",
+      "percent": 100,
+      "opendapnotify": "coastalrisk.live@outlook.com,pub.coastalrisk.live@outlook.com,asgs.cera.lsu@coastalrisk.live,asgs.cera.pub.lsu@coastalrisk.live"
+    },
+    {
+      "type": "veerLeft",
+      "percent": -100,
+      "opendapnotify": "coastalrisk.live@outlook.com,pub.coastalrisk.live@outlook.com,asgs.cera.lsu@coastalrisk.live,asgs.cera.pub.lsu@coastalrisk.live"
+    },
+    {
+      "type": "veerLeftWind10m",
+      "percent": -100,
+      "opendapnotify": "coastalrisk.live@outlook.com,pub.coastalrisk.live@outlook.com,asgs.cera.lsu@coastalrisk.live,asgs.cera.pub.lsu@coastalrisk.live"
+    }
+  ],
+  "WAVES": "on",
+  "REINITIALIZESWAN": "off",
+  "VARFLUX": "off",
+  "CYCLETIMELIMIT": "99:00:00",
+  "MACHINE": "Linux",
+  "NODES_PER_CPU": 4000,
+  "PPN": 28,
+  "NCPU": 27,
+  "NCPUCAPACITY": 9999,
+  "NUMWRITERS": 1,
+  "QUEUESYS": "mpiexec",
+  "EMAILNOTIFY": "yes",
+  "INTENDEDAUDIENCE": "general",
+  "OPENDAPPOST": "opendap_post2.sh",
+  "OPENDAPNOTIFY": "coastalrisk.live@outlook.com,pub.coastalrisk.live@outlook.com,asgs.cera.lsu@coastalrisk.live,asgs.cera.pub.lsu@coastalrisk.live",
+  "POSTPROCESS": "includeWind10m.sh createOPeNDAPFileList.sh $OPENDAPPOST",
+  "FINISH_SPINUP_SCENARIO": "output/createOPeNDAPFileList.sh output/$OPENDAPPOST",
+  "FINISH_NOWCAST_SCENARIO": "output/createOPeNDAPFileList.sh output/$OPENDAPPOST",
+  "NOTIFY_SCRIPT": "cera_notify.sh",
+  "TDS": "lsu_tds",
+  "enablePostStatus": "yes",
+  "enableStatusNotify": "no",
+  "statusNotify": "asgsnotify@memenesia.net",
+  "mesh": null,
+  "output": {},
+  "adcircVersion": "unknown"
+}

@@ -4,7 +4,8 @@ package bin::adcirclive;
 use v5.10;
 use strict;
 use warnings;
-use Util::H2O::More qw/ddd d2o h2o ini2h2o o2h Getopt2h2o HTTPTiny2h2o/;
+use FindBin qw/$Bin/;
+use Util::H2O::More qw/ddd d2o h2o ini2h2o o2d o2h Getopt2h2o HTTPTiny2h2o/;
 use HTTP::Tiny qw//;
 use Digest::SHA qw/sha256_hex/;
 use MIME::Base64 qw/encode_base64/;
@@ -80,38 +81,80 @@ sub _lookup_mesh {
 
 #
 # CLI interface for ASGS Config,
-#  + shouldn't require ACL / HMAC key
-#  + allow it to return something for an very few or no 
-#    e.g., adcirclive config [--default "...*"]
-#    * default naming handled by script and translated to building web request
-#  + --show-default-kinds (lists named defaults - profiles on the SPA)
-#  ? "--interative" wizard mode?
-#  + tidy up "uuid"
 #
+# minimal:
 #
-#  Usage,
+#   adcirclive asgsconfig --operator be --asgsadmin asgs-notify@memenesia.net --met_kind ATCF --gridname HSOFS --ncpu 959
 #
-#    NAME=$(adcirclive config --grid TX2008 --dry-run)            # get potential default name
-#    adcirclive config --grid TX2008 > git/asgs-config/2024/$NAME # use default name
+# optional flags:
+#   --emailnotify  # overrides $config->asgslive->OPENDAPNOTIFY if in ~/asgs-global.conf
+#   --instancename # defaults to ASGS standard format
+#   --machine      # defaults to Linux # check, used here just to create default INSTANCENAME
+#   --ppn          # defaults to NULL  # check
+#   --numwriters   # defaults to 1     # check
+#   --storm        # required with "--metkind ATCF", ignored for others
+#   --year         # defaults to current year, only used with "--metkid ATCF"
 #
+# interactive (second pass?):
+#
+#   adcirclive asgsconfig -i    # ... asks for minimal flags ^^, if more needed refers to the SPA
+#
+# defaults available for setting in in ~/asgs-global.conf:
+#
+#   [adcirclive]
+#   ASGSADMIN=...               $config->asgslive->ASGSADMIN
+#   OPENDAPNOTIFY=...           $config->asgslive->OPENDAPNOTIFY
+#
+# TODO: embed defaults.json in this script
 #
 sub get_asgs_config {
   my ($subcmd, $ARGV_ref, $config) = xshift_and_deref @_;
-  my $o        = Getopt2h2o $ARGV_ref, {as => q{stdout}}, qw/admin=s default=s grid=s instance=s machine=s me=s met=s/; # params?
+
+  my $defaults = d2o -autoundef, decode_json do { local $/; open my $FH, "<", "$Bin/../share/defaults.json"; <$FH> };
+
+  # options that are also in ASGS config
+  my @options   = qw/account adcircversion asgsadmin basin coldstartdate cycle cycletimelimit default emailnotify enablepoststatus enablestatusnotify
+                  finish_nowcast_scenario gridname handle hindcastlength hotorcold instancename intendedaudience lastsubdir machine mesh met_kind ncpu ncpucapacity
+                  notify_script numwriters opendapnotify opendappost output postprocess ppn qos queuesys reinitializeswan specifycoldstart statusnotify storm tds
+                  tidefac varflux waves year/;
+
+  # cli options that are not in ASGS config
+  my @extraopts = qw/operator/;
+
+  # cli flags are: @options + @extraopts
+  my @flags = map { "$_=s" } @options, @extraopts;
+
+  my $o       = Getopt2h2o $ARGV_ref, { as => "stdin", met_kind => "NAM" }, @flags;
+  $o          = d2o -autoundef, o2d $o; # hackaround missing optional hash keys,
+
+#TODO - update "Util::H2O::More::Getopt2h2o" to accept "-autoundef"
+
+  my @missing = ();
+  foreach my $required (qw/operator asgsadmin met_kind gridname ncpu/) {
+    push @missing, "--".$required if (not $o->$required);
+  }
+  if (@missing) {
+    my $msg = sprintf "FATAL - Missing required option flags: %s\n", join(", ",@missing);
+    die $msg;
+  }
+
+  my $kind     = uc $o->met_kind;
+
+  my $payload  = $defaults->$kind; # get default entry, update/modify based on supplied options
+
+  foreach my $field (@options) {
+    if ($o->$field) {
+      my $FIELD = uc $field;
+      $payload->$FIELD($o->$field);
+    }
+  }
+
   my $ua       = _get_signed_ua $config;
-
-
   my $URL      = sprintf qq{%s/spa/models/ASGS/api/file/config}, BASEURL;
 
-  my $content  = do { local $/; open my $FH, "<", "config-sample.json"; <$FH> }; # ??? use JSON as some kind of template or deal with defaults on the server ???
+  $payload->INSTANCENAME($o->instancename // sprintf("%s_%s_%s_%s", $o->gridname // "HSOFS", $o->met_kind // "NAM", $o->machine // "Linux", $o->operator // 'ukwn'));
 
-  my $params   = {
-    INSTANCENAME  => $o->instance // sprintf("%s_%s_%s_%s",$o->grid // "TX2008",$o->met // "NAM",$o->machine // "Linux", $o->me // "ukwn"),
-    ASGSADMIN     => $o->admin    // q{unknown@memenesia.net},
-    GRIDNAME      => $o->grid     // "TX2008",
-  };
-
-  my $response = HTTPTiny2h2o $ua->post($URL, { content => encode_json $params });
+  my $response = HTTPTiny2h2o $ua->post($URL, { content => encode_json o2d  $payload });
 
   print $response->content->content;
 }
@@ -239,7 +282,7 @@ sub show_help {
   print STDERR <<EOF;
 adcirclive - Commandline client for tools.adcirc.live
 
-Subcomman ds:
+Subcommands:
   adcirclive meshes - list all supported meshes
 EOF
 };
